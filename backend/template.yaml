@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Sensory-Aware Route Planner backend
+
+Parameters:
+  DbClusterArn:
+    Type: String
+    Default: arn:aws:rds:ap-southeast-2:837873138727:cluster:database-1
+  DbSecretArn:
+    Type: String
+    Default: arn:aws:secretsmanager:ap-southeast-2:837873138727:secret:routeplanner-db-secret-hpSdDs
+
+Resources:
+  RoutePlannerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda.handler
+      Runtime: nodejs20.x
+      Timeout: 15
+      MemorySize: 256
+      CodeUri: ./
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: ["*"]
+      Environment:
+        Variables:
+          DB_CLUSTER_ARN: !Ref DbClusterArn
+          DB_SECRET_ARN: !Ref DbSecretArn
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+                - secretsmanager:GetSecretValue
+              Resource: '*'
+
+Outputs:
+  FunctionUrl:
+    Description: Live URL for your backend
+    Value: !GetAtt RoutePlannerFunctionUrl.FunctionUrl
