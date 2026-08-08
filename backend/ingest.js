@@ -104,4 +104,83 @@ async function ingestSensors() {
   if (rejectionLog.length) console.log('Rejected records:', JSON.stringify(rejectionLog, null, 2));
 }
 
-ingestSensors().catch(console.error);
+function cleanReadingRecord(record) {
+  const { location_id, sensing_datetime, total_of_directions } = record;
+  const issues = [];
+
+  if (location_id == null) issues.push('missing sensor_id (source field: location_id)');
+  if (sensing_datetime == null) issues.push('missing timestamp');
+  if (total_of_directions == null) issues.push('missing count');
+
+  const cleanCount = total_of_directions != null ? parseInt(total_of_directions, 10) : null;
+  if (total_of_directions != null && isNaN(cleanCount)) issues.push('count not numeric');
+  if (cleanCount != null && cleanCount < 0) issues.push('negative count — invalid');
+
+  const validDate = sensing_datetime != null && !isNaN(Date.parse(sensing_datetime));
+  if (sensing_datetime != null && !validDate) issues.push('timestamp not parseable');
+
+  return {
+    valid: issues.length === 0,
+    issues,
+    cleaned: {
+      sensor_id: String(location_id ?? '').trim(),
+      count: cleanCount,
+      recorded_at: sensing_datetime
+    }
+  };
+}
+
+async function ingestReadings() {
+  const res = await fetch(
+    'https://data.melbourne.vic.gov.au/api/explore/v2.1/catalog/datasets/pedestrian-counting-system-past-hour-counts-per-minute/records?limit=100'
+  );
+  const data = await res.json();
+  console.log(`Fetched ${data.results.length} raw reading records`);
+
+  let inserted = 0, rejected = 0, skippedUnknownSensor = 0;
+  const rejectionLog = [];
+
+  for (const record of data.results) {
+    const { valid, issues, cleaned } = cleanReadingRecord(record);
+
+    if (!valid) {
+      rejected++;
+      rejectionLog.push({ location_id: record.location_id, issues });
+      continue;
+    }
+
+    try {
+      await query(
+        `INSERT INTO pedestrian_reading (sensor_id, count, recorded_at) VALUES (:sid, :count, :recorded_at::timestamptz)`,
+        [
+          { name: 'sid', value: { stringValue: cleaned.sensor_id } },
+          { name: 'count', value: { longValue: cleaned.count } },
+          { name: 'recorded_at', value: { stringValue: cleaned.recorded_at } }
+        ]
+      );
+      inserted++;
+    } catch (err) {
+      skippedUnknownSensor++;
+    }
+  }
+
+  console.log(`Readings report: ${inserted} inserted, ${rejected} rejected, ${skippedUnknownSensor} skipped (unknown sensor)`);
+  if (rejectionLog.length) console.log('Rejected records:', JSON.stringify(rejectionLog, null, 2));
+
+  await query(`
+    UPDATE pedestrian_reading pr
+    SET rolling_avg_4wk = sub.avg_count
+    FROM (
+      SELECT sensor_id, AVG(count) as avg_count
+      FROM pedestrian_reading
+      WHERE recorded_at > now() - interval '28 days'
+      GROUP BY sensor_id
+    ) sub
+    WHERE pr.sensor_id = sub.sensor_id;
+  `);
+  console.log('Rolling averages recomputed');
+}
+
+// ingestSensors().catch(console.error);
+ingestReadings().catch(console.error);
+
