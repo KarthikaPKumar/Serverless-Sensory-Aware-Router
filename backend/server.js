@@ -105,6 +105,57 @@ app.post('/api/routes', async (req, res) => {
   });
 });
 
+app.get('/api/refuges', async (req, res) => {
+  const { lat, lng, type } = req.query;
+  if (!lat || !lng) {
+    return res.status(400).json({ error: 'lat and lng query params required' });
+  }
+
+  let sql = `
+    SELECT r.refuge_id, r.name, r.type,
+           ST_Distance(l.geom::geography, ST_SetSRID(ST_MakePoint(:lng,:lat),4326)::geography) AS distance_m
+    FROM refuge r
+    JOIN location l ON r.location_id = l.location_id
+    WHERE ST_DWithin(l.geom::geography, ST_SetSRID(ST_MakePoint(:lng,:lat),4326)::geography, 800)
+  `;
+  const params = [
+    { name: 'lng', value: { doubleValue: parseFloat(lng) } },
+    { name: 'lat', value: { doubleValue: parseFloat(lat) } }
+  ];
+
+  if (type) {
+    sql += ` AND r.type = :type`;
+    params.push({ name: 'type', value: { stringValue: type } });
+  }
+  sql += ` ORDER BY distance_m ASC LIMIT 10`;
+
+  const result = await query(sql, params);
+  const refuges = (result.records || []).map(row => ({
+    refugeId: row[0].stringValue,
+    name: row[1].stringValue,
+    type: row[2].stringValue,
+    distanceMeters: Math.round(row[3].doubleValue)
+  }));
+
+  // Fallback: expand radius if fewer than 3 results at 800m
+  let finalRefuges = refuges;
+  let radiusUsed = 800;
+
+  if (finalRefuges.length < 3) {
+    const expandedSql = sql.replace('800', '2000'); // widen to 2km
+    const expandedResult = await query(expandedSql, params);
+    finalRefuges = (expandedResult.records || []).map(row => ({
+      refugeId: row[0].stringValue,
+      name: row[1].stringValue,
+      type: row[2].stringValue,
+      distanceMeters: Math.round(row[3].doubleValue)
+    }));
+    radiusUsed = 2000;
+  }
+
+  res.json({ refuges: finalRefuges, count: finalRefuges.length, radiusUsed });
+});
+
 if (require.main === module) {
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => console.log(`Server running locally on port ${PORT}`));
