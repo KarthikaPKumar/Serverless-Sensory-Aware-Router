@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Sensory-Aware Route Planner backend
+
+Parameters:
+  DbClusterArn:
+    Type: String
+  DbSecretArn:
+    Type: String
+  DbName:
+    Type: String
+    Default: postgres
+  MapsProvider:
+    Type: String
+    Default: mock
+    AllowedValues: [mock, google]
+  GoogleMapsApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+  AllowedOrigin:
+    Type: String
+    Default: http://localhost:5173
+
+Resources:
+  RoutePlannerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_handlers.handler.handler
+      Runtime: python3.13
+      Timeout: 15
+      MemorySize: 256
+      CodeUri: backend/
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !Ref AllowedOrigin
+          AllowMethods:
+            - GET
+            - POST
+          AllowHeaders:
+            - Content-Type
+            - X-Request-ID
+          ExposeHeaders:
+            - X-Request-ID
+      Environment:
+        Variables:
+          DATA_BACKEND: aurora
+          AURORA_AWS_REGION: !Ref AWS::Region
+          DB_CLUSTER_ARN: !Ref DbClusterArn
+          DB_SECRET_ARN: !Ref DbSecretArn
+          DB_NAME: !Ref DbName
+          MAPS_PROVIDER: !Ref MapsProvider
+          GOOGLE_MAPS_API_KEY: !Ref GoogleMapsApiKey
+          ALLOWED_ORIGINS: !Ref AllowedOrigin
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - rds-data:ExecuteStatement
+                - rds-data:BatchExecuteStatement
+              Resource: !Ref DbClusterArn
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Ref DbSecretArn
+
+Outputs:
+  FunctionUrl:
+    Description: Live URL for your backend
+    Value: !GetAtt RoutePlannerFunctionUrl.FunctionUrl

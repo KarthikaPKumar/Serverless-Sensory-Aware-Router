@@ -1,0 +1,19 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "City of Melbourne ingestion utilities for the route planner",
+  "main": "ingest.js",
+  "scripts": {
+    "test": "node --test tests-node/*.test.js",
+    "ingest:pedestrian": "node ingest.js",
+    "ingest:refuges": "node ingest-refuge.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@aws-sdk/client-rds-data": "^3.1104.0",
+    "node-fetch": "^2.7.0"
+  }
+}
