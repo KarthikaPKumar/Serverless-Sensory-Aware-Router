@@ -10,3 +10,7 @@ AWS Lambda + Aurora Serverless (PostgreSQL + PostGIS) backend for the Sensory-Aw
 
 ## Setup
 See `infrastructure/schema.sql` for database schema.
+
+## Visit
+https://industry-experience-onboarding.vercel.app/
+
