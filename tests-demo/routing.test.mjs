@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {findRoute,nodes,edges,validateNetwork} from '../docs/network.mjs';
+const zero={crowd:0,noise:0,light:0};
+test('shortest path follows the direct 9-minute corridor',()=>{const r=findRoute('station','gallery',zero);assert.equal(r.minutes,9);assert.deepEqual(r.path,['station','market','library','gallery']);});
+test('sensory preferences trade time for reduced sample exposure',()=>{const fast=findRoute('station','gallery',zero),quiet=findRoute('station','gallery',{crowd:2,noise:5,light:0});assert.ok(quiet.minutes>fast.minutes);assert.ok(quiet.scores.noise<fast.scores.noise);});
+test('all 90 distinct pairs return contiguous, positive routes',()=>{for(const a of nodes)for(const b of nodes){if(a.id===b.id)continue;const r=findRoute(a.id,b.id,{crowd:2,noise:2,light:2});assert.equal(r.path[0],a.id);assert.equal(r.path.at(-1),b.id);assert.ok(r.minutes>0);assert.equal(new Set(r.path).size,r.path.length);for(let i=1;i<r.path.length;i++)assert.ok(edges.some(e=>(e.a===r.path[i-1]&&e.b===r.path[i])||(e.b===r.path[i-1]&&e.a===r.path[i])));}});
+test('invalid journeys and weights are rejected',()=>{assert.throws(()=>findRoute('station','station',zero));assert.throws(()=>findRoute('missing','gallery',zero));assert.throws(()=>findRoute('station','gallery',{...zero,noise:NaN}));assert.throws(()=>findRoute('station','gallery',{...zero,noise:-1}));});
+test('disconnected graph is handled explicitly',()=>assert.throws(()=>findRoute('station','gallery',zero,nodes,[]),/No connected route/));
+test('invalid sample data is rejected',()=>assert.throws(()=>validateNetwork(nodes,[{...edges[0],crowd:101}]),/Invalid sensory signal/));
+test('zero weights give a cost equal to walking time',()=>{const r=findRoute('garden','gallery',zero);assert.equal(r.cost,r.minutes);});

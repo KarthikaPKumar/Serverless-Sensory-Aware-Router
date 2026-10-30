@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test tests-node/*.test.js",
     "ingest:pedestrian": "node ingest.js",
-    "ingest:refuges": "node ingest-refuge.js"
+    "ingest:refuges": "node ingest-refuge.js",
+    "test:demo": "node --test tests-demo/routing.test.mjs"
   },
   "keywords": [],
   "author": "",
